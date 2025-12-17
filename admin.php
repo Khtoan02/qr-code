@@ -3,38 +3,67 @@ require_once 'config.php';
 require_once 'includes/db.php';
 requireAuth();
 
+// Get current user
+$currentUser = getCurrentUser();
+
 // Handle POST requests BEFORE any output
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_payment'])) {
-    require_once 'includes/sepay.php';
-    
-    // Get amount from hidden input (raw value) or from formatted input
-    $amountRaw = $_POST['amountValue'] ?? $_POST['amount'] ?? '0';
-    $amount = floatval(str_replace('.', '', $amountRaw));
-    $note = $_POST['note'] ?? '';
-    
-    if ($amount > 0) {
-        $id = uniqid('tx_', true);
-        $paymentCode = generatePaymentCode();
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['create_payment'])) {
+        require_once 'includes/sepay.php';
         
-        $transaction = [
-            'id' => $id,
-            'payment_code' => $paymentCode,
-            'amount' => $amount,
-            'description' => $note ?: $paymentCode,
-            'customer_name' => 'Khách lẻ',
-            'status' => 'PENDING',
-            'created_at' => time() * 1000
-        ];
+        // Get amount from hidden input (raw value) or from formatted input
+        $amountRaw = $_POST['amountValue'] ?? $_POST['amount'] ?? '0';
+        $amount = floatval(str_replace('.', '', $amountRaw));
+        $note = $_POST['note'] ?? '';
         
-        Database::saveTransaction($transaction);
-        header('Location: ?tab=POS&created=' . $id);
-        exit;
+        if ($amount > 0) {
+            $id = uniqid('tx_', true);
+            $paymentCode = generatePaymentCode();
+            
+            $transaction = [
+                'id' => $id,
+                'payment_code' => $paymentCode,
+                'amount' => $amount,
+                'description' => $note ?: $paymentCode,
+                'customer_name' => 'Khách lẻ',
+                'created_by' => $currentUser['id'],
+                'status' => 'PENDING',
+                'created_at' => time() * 1000
+            ];
+            
+            Database::saveTransaction($transaction);
+            header('Location: ?tab=POS&created=' . $id);
+            exit;
+        }
+    } elseif (isset($_POST['create_employee']) && isAdmin()) {
+        $username = $_POST['username'] ?? '';
+        $password = $_POST['password'] ?? '';
+        
+        if ($username && $password) {
+            try {
+                Database::createUser($username, $password, 'employee');
+                header('Location: ?tab=EMPLOYEES&success=created');
+                exit;
+            } catch (Exception $e) {
+                header('Location: ?tab=EMPLOYEES&error=exists');
+                exit;
+            }
+        }
+    } elseif (isset($_POST['delete_employee']) && isAdmin()) {
+        $userId = intval($_POST['user_id'] ?? 0);
+        if ($userId && $userId != $currentUser['id']) {
+            Database::deleteUser($userId);
+            header('Location: ?tab=EMPLOYEES&success=deleted');
+            exit;
+        }
     }
 }
 
 $activeTab = $_GET['tab'] ?? 'DASHBOARD';
-$stats = Database::getTransactionStats();
-$transactions = Database::getTransactions();
+$userId = isAdmin() ? null : $currentUser['id'];
+$stats = Database::getTransactionStats($userId);
+$transactions = Database::getTransactions('ALL', $userId, isAdmin()); // Include user info for admin
+$allUsers = isAdmin() ? Database::getAllUsers() : [];
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -96,6 +125,14 @@ $transactions = Database::getTransactions();
                 </svg>
                 <span class="font-medium text-sm">Lịch sử giao dịch</span>
             </a>
+            <?php if (isAdmin()): ?>
+            <a href="?tab=EMPLOYEES" class="flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-200 <?php echo $activeTab === 'EMPLOYEES' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'; ?>">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <span class="font-medium text-sm">Quản lý nhân viên</span>
+            </a>
+            <?php endif; ?>
         </nav>
 
         <div class="p-4 border-t border-slate-800">
@@ -115,17 +152,18 @@ $transactions = Database::getTransactions();
                 <?php
                 if ($activeTab === 'DASHBOARD') echo 'Bảng điều khiển';
                 elseif ($activeTab === 'POS') echo 'Tạo giao dịch mới';
+                elseif ($activeTab === 'EMPLOYEES') echo 'Quản lý nhân viên';
                 else echo 'Lịch sử giao dịch';
                 ?>
             </h2>
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2 pl-4 border-l border-slate-200">
-                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs">
-                        AD
+                    <div class="w-8 h-8 rounded-full <?php echo isAdmin() ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'; ?> flex items-center justify-center font-bold text-xs">
+                        <?php echo strtoupper(substr($currentUser['username'], 0, 2)); ?>
                     </div>
                     <div>
-                        <p class="text-sm font-medium text-slate-700">Administrator</p>
-                        <p class="text-[10px] text-slate-400 uppercase">System Admin</p>
+                        <p class="text-sm font-medium text-slate-700"><?php echo htmlspecialchars($currentUser['username']); ?></p>
+                        <p class="text-[10px] text-slate-400 uppercase"><?php echo isAdmin() ? 'Administrator' : 'Nhân viên'; ?></p>
                     </div>
                 </div>
             </div>
@@ -136,6 +174,8 @@ $transactions = Database::getTransactions();
                 <?php include 'includes/dashboard.php'; ?>
             <?php elseif ($activeTab === 'POS'): ?>
                 <?php include 'includes/create_payment.php'; ?>
+            <?php elseif ($activeTab === 'EMPLOYEES'): ?>
+                <?php include 'includes/employees.php'; ?>
             <?php else: ?>
                 <?php include 'includes/history.php'; ?>
             <?php endif; ?>

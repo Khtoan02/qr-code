@@ -1,19 +1,37 @@
 <?php
 require_once 'config.php';
+require_once 'includes/db.php';
 
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'] ?? '';
+    $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     
-    if ($username === 'admin' && $password === '123456') {
-        $_SESSION['is_authenticated'] = true;
-        $_SESSION['username'] = $username;
-        header('Location: /admin.php');
-        exit;
+    if (empty($username) || empty($password)) {
+        $error = 'Vui lòng nhập đầy đủ thông tin';
     } else {
-        $error = 'Tên đăng nhập hoặc mật khẩu không đúng';
+        try {
+            $user = Database::getUserByUsername($username);
+            
+            if ($user) {
+                if (password_verify($password, $user['password_hash'])) {
+                    $_SESSION['is_authenticated'] = true;
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['role'] = $user['role'] ?? 'employee';
+                    header('Location: /admin.php');
+                    exit;
+                } else {
+                    $error = 'Mật khẩu không đúng';
+                }
+            } else {
+                $error = 'Tên đăng nhập không tồn tại';
+            }
+        } catch (Exception $e) {
+            $error = 'Lỗi hệ thống. Vui lòng thử lại sau.';
+            error_log("Login error: " . $e->getMessage());
+        }
     }
 }
 ?>

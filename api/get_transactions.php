@@ -5,8 +5,10 @@ requireAuth();
 
 header('Content-Type: application/json');
 
+$currentUser = getCurrentUser();
+$userId = isAdmin() ? null : $currentUser['id'];
 $filter = $_GET['filter'] ?? 'ALL';
-$transactions = Database::getTransactions($filter);
+$transactions = Database::getTransactions($filter, $userId);
 
 echo json_encode(['transactions' => $transactions]);
 ?>

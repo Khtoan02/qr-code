@@ -1,5 +1,15 @@
 <?php
 $chartData = array_slice(array_reverse($transactions), 0, 10);
+$employeeStats = [];
+if (isAdmin() && !empty($allUsers)) {
+    foreach ($allUsers as $user) {
+        $userStats = Database::getTransactionStats($user['id']);
+        $employeeStats[] = [
+            'user' => $user,
+            'stats' => $userStats
+        ];
+    }
+}
 ?>
 <div class="space-y-6 animate-fade-in">
   <!-- Stats Row -->
@@ -112,6 +122,55 @@ $chartData = array_slice(array_reverse($transactions), 0, 10);
         </div>
      </div>
   </div>
+
+  <?php if (isAdmin() && !empty($employeeStats)): ?>
+  <!-- Employee Stats Section (Admin Only) -->
+  <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+    <div class="flex justify-between items-center mb-6">
+      <h4 class="font-bold text-slate-800">Thống kê theo nhân viên</h4>
+      <a href="?tab=EMPLOYEES" class="text-xs text-emerald-600 font-bold hover:underline">Quản lý nhân viên</a>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <?php foreach ($employeeStats as $emp): 
+        $user = $emp['user'];
+        $empStats = $emp['stats'];
+      ?>
+        <div class="p-4 border border-slate-200 rounded-xl hover:border-emerald-300 transition-colors">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-full <?php echo $user['role'] === 'admin' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'; ?> flex items-center justify-center font-bold text-sm">
+              <?php echo strtoupper(substr($user['username'], 0, 2)); ?>
+            </div>
+            <div class="flex-1">
+              <p class="text-sm font-bold text-slate-800"><?php echo htmlspecialchars($user['username']); ?></p>
+              <p class="text-xs text-slate-500"><?php echo $user['role'] === 'admin' ? 'Quản trị viên' : 'Nhân viên'; ?></p>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-slate-500">Doanh thu:</span>
+              <span class="text-sm font-bold text-emerald-600"><?php echo formatVND($empStats['revenue']); ?></span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-slate-500">Tổng đơn:</span>
+              <span class="text-sm font-bold text-slate-800"><?php echo $empStats['total']; ?></span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-slate-500">Thành công:</span>
+              <span class="text-sm font-bold text-green-600"><?php echo $empStats['paid']; ?></span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-slate-500">Đang chờ:</span>
+              <span class="text-sm font-bold text-amber-600"><?php echo $empStats['pending']; ?></span>
+            </div>
+          </div>
+          <a href="?tab=HISTORY&employee=<?php echo $user['id']; ?>" class="block mt-3 text-center text-xs text-emerald-600 font-medium hover:underline">
+            Xem giao dịch →
+          </a>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
 </div>
 
 <script>

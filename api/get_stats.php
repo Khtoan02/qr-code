@@ -5,7 +5,9 @@ requireAuth();
 
 header('Content-Type: application/json');
 
-$stats = Database::getTransactionStats();
+$currentUser = getCurrentUser();
+$userId = isAdmin() ? null : $currentUser['id'];
+$stats = Database::getTransactionStats($userId);
 echo json_encode($stats);
 ?>
 
