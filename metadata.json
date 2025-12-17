@@ -1,0 +1,5 @@
+{
+  "name": "PayGen & Design Studio",
+  "description": "Ứng dụng tạo mã thanh toán QR với bảng điều khiển quản trị và tính năng chỉnh sửa ảnh AI sử dụng Gemini 2.5 Flash Image.",
+  "requestFramePermissions": []
+}
